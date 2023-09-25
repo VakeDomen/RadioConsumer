@@ -1,19 +1,61 @@
 use std::io::{BufRead, BufReader, Write, Read};
 use std::net::TcpStream;
 use std::str;
+use std::time::Duration;
 
 use crate::error::ShoutcastError;
 
-pub fn connect_to_server(host: &str, port: u16) -> Result<TcpStream, ShoutcastError> {
+
+pub fn shoutcast_listen(host: &str, port: u16, path: &str) {
+    let mut stream = match connect_to_server(host, port) {
+        Ok(stream) => stream,
+        Err(e) => return eprintln!("Error connecting to server: {}", e),
+    };
+    println!("Connected to server");
+
+
+    if let Err(e) = stream.set_read_timeout(Some(Duration::from_secs(10))) {
+        eprintln!("Error setting read timeout: {}", e);
+        return;
+    }
+
+    if let Err(e) = send_request(&mut stream, path) {
+        eprintln!("Error sending request: {}", e);
+        return;
+    }
+    
+    println!("Headers sent");
+
+    let reader = BufReader::new(&stream);
+    
+    let meta_interval = match read_headers(reader) {
+        Ok(meta_interval) => meta_interval,
+        Err(e) => return eprintln!("Error reading headers: {}", e),
+    };
+
+    if meta_interval == 0 {
+        eprintln!("Failed to get meta_interval");
+        return;
+    }
+    
+    println!("Meta Interval: {}", meta_interval);
+
+    if let Err(e) = read_stream(&mut stream, meta_interval) {
+        eprintln!("Error reading stream: {}", e);
+    }
+}
+
+
+fn connect_to_server(host: &str, port: u16) -> Result<TcpStream, ShoutcastError> {
     TcpStream::connect((host, port)).map_err(ShoutcastError::from)
 }
 
-pub fn send_request(stream: &mut TcpStream, path: &str) -> Result<(), ShoutcastError> {
+fn send_request(stream: &mut TcpStream, path: &str) -> Result<(), ShoutcastError> {
     let request = format!("GET {} HTTP/1.0\r\nIcy-MetaData:1\r\n\r\n", path);
     stream.write_all(request.as_bytes()).map_err(ShoutcastError::from)
 }
 
-pub fn read_headers(reader: BufReader<&TcpStream>) -> Result<usize, ShoutcastError> {
+fn read_headers(reader: BufReader<&TcpStream>) -> Result<usize, ShoutcastError> {
     let mut meta_int = 0;
     for line in reader.lines() {
         let line = line.map_err(ShoutcastError::from)?;
@@ -28,7 +70,7 @@ pub fn read_headers(reader: BufReader<&TcpStream>) -> Result<usize, ShoutcastErr
     Ok(meta_int)
 }
 
-pub fn read_stream(stream: &mut TcpStream, meta_int: usize) -> Result<(), ShoutcastError> {
+fn read_stream(stream: &mut TcpStream, meta_int: usize) -> Result<(), ShoutcastError> {
     let mut mp3_data = vec![0; meta_int];
     let mut meta_length_buf = [0; 1];
 
@@ -48,7 +90,7 @@ pub fn read_stream(stream: &mut TcpStream, meta_int: usize) -> Result<(), Shoutc
                 if let Some(end) = remaining.find("';") {
                     let title = &remaining[..end];
                     println!("StreamTitle: {}", title);
-                    
+
                 }
             }
         }

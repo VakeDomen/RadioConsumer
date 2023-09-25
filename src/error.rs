@@ -1,5 +1,8 @@
 use std::{io, error::Error};
 
+use tokio_tungstenite::tungstenite;
+
+
 
 
 #[derive(Debug)]
@@ -34,3 +37,35 @@ impl std::fmt::Display for ShoutcastError {
 }
 
 impl Error for ShoutcastError {}
+
+// #[derive(Debug)]
+// pub enum RockradioError {
+//     UrlParse(url::ParseError),
+//     Connection(tungstenite::Error),
+//     JsonParse(serde_json::Error),
+//     MessageConversion(tungstenite::error::MessageError),
+// }
+
+// impl From<url::ParseError> for RockradioError {
+//     fn from(err: url::ParseError) -> RockradioError {
+//         RockradioError::UrlParse(err)
+//     }
+// }
+
+// impl From<tungstenite::Error> for RockradioError {
+//     fn from(err: tungstenite::Error) -> RockradioError {
+//         RockradioError::Connection(err)
+//     }
+// }
+
+// impl From<serde_json::Error> for RockradioError {
+//     fn from(err: serde_json::Error) -> RockradioError {
+//         RockradioError::JsonParse(err)
+//     }
+// }
+
+// impl From<tungstenite::error::MessageError> for RockradioError {
+//     fn from(err: tungstenite::error::MessageError) -> RockradioError {
+//         RockradioError::MessageConversion(err)
+//     }
+// }
