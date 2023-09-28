@@ -9,12 +9,12 @@ use crate::radio::ShoutcastConfig;
 
 pub fn listen_shoutcast(radio: ShoutcastConfig) {
     loop {
-        let (_, host, port, path) = radio;
+        let (name, host, port, path) = radio;
         let mut stream = match connect_to_server(host, port) {
             Ok(stream) => stream,
             Err(e) => return eprintln!("Error connecting to shoutcast server: {}", e),
         };
-        println!("Connected to shoutcast server");
+        println!("Connected to shoutcast server: {}", name);
     
     
         if let Err(e) = stream.set_read_timeout(Some(Duration::from_secs(10))) {
@@ -27,8 +27,6 @@ pub fn listen_shoutcast(radio: ShoutcastConfig) {
             return;
         }
         
-        println!("Headers sent");
-    
         let reader = BufReader::new(&stream);
         
         let meta_interval = match read_headers(reader) {
@@ -43,7 +41,7 @@ pub fn listen_shoutcast(radio: ShoutcastConfig) {
         
         println!("Metadata byte Interval: {}", meta_interval);
     
-        if let Err(e) = read_stream(&mut stream, meta_interval) {
+        if let Err(e) = read_stream(&mut stream, meta_interval, name) {
             eprintln!("Error reading stream: {}", e);
         }
     }
@@ -72,7 +70,6 @@ fn read_headers(mut reader: BufReader<&TcpStream>) -> Result<usize, ShoutcastErr
         }
         
         let line = String::from_utf8_lossy(&buffer);
-        println!("{:?}", line);
         if line.starts_with("icy-metaint:") {
             meta_int = line[12..].trim().parse::<usize>().map_err(ShoutcastError::from)?;
             break;
@@ -86,7 +83,7 @@ fn read_headers(mut reader: BufReader<&TcpStream>) -> Result<usize, ShoutcastErr
 }
 
 
-fn read_stream(stream: &mut TcpStream, meta_int: usize) -> Result<(), ShoutcastError> {
+fn read_stream(stream: &mut TcpStream, meta_int: usize, name: &str) -> Result<(), ShoutcastError> {
     let mut mp3_data = vec![0; meta_int];
     let mut meta_length_buf = [0; 1];
 
@@ -105,7 +102,7 @@ fn read_stream(stream: &mut TcpStream, meta_int: usize) -> Result<(), ShoutcastE
                 let remaining = &trimmed_meta[start + 13..];
                 if let Some(end) = remaining.find("';") {
                     let title = &remaining[..end];
-                    println!("StreamTitle: {}", title);
+                    println!("[{}]\tStreamTitle: \t{}", name, title);
 
                 }
             }

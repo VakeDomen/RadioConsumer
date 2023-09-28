@@ -32,7 +32,7 @@ async fn start_listening_wss(wss_link: &str) {
                             }
                         };
                         if let Some((artist, title)) = data {
-                            println!("{} - {}", artist, title);
+                            println!("StreamTitle:\t{} - {}", artist, title);
                         }
                     }
                 }
