@@ -4,44 +4,48 @@ use std::str;
 use std::time::Duration;
 
 use crate::error::ShoutcastError;
+use crate::radio::ShoutcastConfig;
 
 
-pub fn shoutcast_listen(host: &str, port: u16, path: &str) {
-    let mut stream = match connect_to_server(host, port) {
-        Ok(stream) => stream,
-        Err(e) => return eprintln!("Error connecting to server: {}", e),
-    };
-    println!("Connected to server");
-
-
-    if let Err(e) = stream.set_read_timeout(Some(Duration::from_secs(10))) {
-        eprintln!("Error setting read timeout: {}", e);
-        return;
-    }
-
-    if let Err(e) = send_request(&mut stream, path) {
-        eprintln!("Error sending request: {}", e);
-        return;
-    }
+pub fn listen_shoutcast(radio: ShoutcastConfig) {
+    loop {
+        let (_, host, port, path) = radio;
+        let mut stream = match connect_to_server(host, port) {
+            Ok(stream) => stream,
+            Err(e) => return eprintln!("Error connecting to shoutcast server: {}", e),
+        };
+        println!("Connected to shoutcast server");
     
-    println!("Headers sent");
-
-    let reader = BufReader::new(&stream);
     
-    let meta_interval = match read_headers(reader) {
-        Ok(meta_interval) => meta_interval,
-        Err(e) => return eprintln!("Error reading headers: {}", e),
-    };
-
-    if meta_interval == 0 {
-        eprintln!("Failed to get meta_interval");
-        return;
-    }
+        if let Err(e) = stream.set_read_timeout(Some(Duration::from_secs(10))) {
+            eprintln!("Error setting read timeout: {}", e);
+            return;
+        }
     
-    println!("Meta Interval: {}", meta_interval);
+        if let Err(e) = send_request(&mut stream, path) {
+            eprintln!("Error sending request: {}", e);
+            return;
+        }
+        
+        println!("Headers sent");
+    
+        let reader = BufReader::new(&stream);
+        
+        let meta_interval = match read_headers(reader) {
+            Ok(meta_interval) => meta_interval,
+            Err(e) => return eprintln!("Error reading headers: {}", e),
+        };
 
-    if let Err(e) = read_stream(&mut stream, meta_interval) {
-        eprintln!("Error reading stream: {}", e);
+        if meta_interval == 0 {
+            eprintln!("Failed to get metadata byte_interval");
+            return;
+        }
+        
+        println!("Metadata byte Interval: {}", meta_interval);
+    
+        if let Err(e) = read_stream(&mut stream, meta_interval) {
+            eprintln!("Error reading stream: {}", e);
+        }
     }
 }
 
@@ -82,8 +86,8 @@ fn read_stream(stream: &mut TcpStream, meta_int: usize) -> Result<(), ShoutcastE
         if meta_length > 0 {
             let mut metadata_buf = vec![0; meta_length];
             stream.read_exact(&mut metadata_buf)?;
-
-            let metadata = str::from_utf8(&metadata_buf)?;
+            let metadata = String::from_utf8_lossy(&metadata_buf);
+            
             let trimmed_meta = metadata.trim_end_matches('\0');
             if let Some(start) = trimmed_meta.find("StreamTitle='") {
                 let remaining = &trimmed_meta[start + 13..];

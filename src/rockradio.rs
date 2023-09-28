@@ -3,31 +3,41 @@ use serde_json::Value;
 use tokio_stream::StreamExt;
 use tokio_tungstenite::connect_async;
 
-pub async fn listen_rockradio(wss_link: &str) {
-    let url = Url::parse(wss_link).expect("Failed to parse WebSocket link");
+use crate::radio::WSSConfig;
 
-    let (mut ws_stream, _) = connect_async(url)
-        .await
-        .expect("Error connecting to the server");
+pub fn listen_wss(wss_config: WSSConfig) {
+    let (_, wss) = wss_config;
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(start_listening_wss(wss))
+}
 
-    while let Some(msg) = ws_stream.next().await {
-        match msg {
-            Ok(msg) => {
-                if msg.is_text() || msg.is_binary() {
-                    let text = msg.into_text().unwrap();
-                    let data = match serde_json::from_str::<Value>(&text) {
-                        Ok(value) => handle_json_value(value),
-                        Err(e) => {
-                            eprintln!("Error parsing JSON: {}", e);
-                            continue;
+async fn start_listening_wss(wss_link: &str) {
+    loop {
+        let url = Url::parse(wss_link).expect("Failed to parse WebSocket link");
+    
+        let (mut ws_stream, _) = connect_async(url)
+            .await
+            .expect("Error connecting to the server");
+    
+        while let Some(msg) = ws_stream.next().await {
+            match msg {
+                Ok(msg) => {
+                    if msg.is_text() || msg.is_binary() {
+                        let text = msg.into_text().unwrap();
+                        let data = match serde_json::from_str::<Value>(&text) {
+                            Ok(value) => handle_json_value(value),
+                            Err(e) => {
+                                eprintln!("Error parsing JSON: {}", e);
+                                continue;
+                            }
+                        };
+                        if let Some((artist, title)) = data {
+                            println!("{} - {}", artist, title);
                         }
-                    };
-                    if let Some((artist, title)) = data {
-                        println!("{} - {}", artist, title);
                     }
                 }
+                Err(e) => eprintln!("Error during receiving a message: {}", e),
             }
-            Err(e) => eprintln!("Error during receiving a message: {}", e),
         }
     }
 }
