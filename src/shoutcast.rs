@@ -59,20 +59,32 @@ fn send_request(stream: &mut TcpStream, path: &str) -> Result<(), ShoutcastError
     stream.write_all(request.as_bytes()).map_err(ShoutcastError::from)
 }
 
-fn read_headers(reader: BufReader<&TcpStream>) -> Result<usize, ShoutcastError> {
+fn read_headers(mut reader: BufReader<&TcpStream>) -> Result<usize, ShoutcastError> {
     let mut meta_int = 0;
-    for line in reader.lines() {
-        let line = line.map_err(ShoutcastError::from)?;
+    let mut buffer = Vec::new();
+    
+    loop {
+        buffer.clear();
+        let bytes_read = reader.read_until(b'\n', &mut buffer).map_err(ShoutcastError::from)?;
+        
+        if bytes_read == 0 {
+            break; // End of stream
+        }
+        
+        let line = String::from_utf8_lossy(&buffer);
+        println!("{:?}", line);
         if line.starts_with("icy-metaint:") {
-            meta_int = line[12..].parse::<usize>().map_err(ShoutcastError::from)?;
+            meta_int = line[12..].trim().parse::<usize>().map_err(ShoutcastError::from)?;
             break;
         }
-        if line.is_empty() {
-            break;
+        
+        if line.trim().is_empty() {
+            break; // End of headers
         }
     }
     Ok(meta_int)
 }
+
 
 fn read_stream(stream: &mut TcpStream, meta_int: usize) -> Result<(), ShoutcastError> {
     let mut mp3_data = vec![0; meta_int];
